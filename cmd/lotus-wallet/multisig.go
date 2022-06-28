@@ -11,6 +11,8 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/wallet"
+	"github.com/filecoin-project/lotus/chain/wallet/key"
 	lcli "github.com/filecoin-project/lotus/cli"
 	msig2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/ipfs/go-cid"
@@ -106,11 +108,23 @@ var msigProposeCmd = &cli.Command{
 			}
 			from = f
 		} else {
-			// defaddr, err := lwapi.WalletDefaultAddress(ctx)
-			// if err != nil {
-			// 	return err
-			// }
-			// from = defaddr
+			lr, ks, err := openRepo(cctx)
+			if err != nil {
+				return err
+			}
+			defer lr.Close() // nolint
+
+			ki, err := ks.Get(wallet.KDefault)
+			if err != nil {
+				return fmt.Errorf("failed to get default key: %w", err)
+			}
+
+			k, err := key.NewKey(ki)
+			if err != nil {
+				return fmt.Errorf("failed to read default key from keystore: %w", err)
+			}
+
+			from = k.Address
 		}
 
 		act, err := fapi.StateGetActor(ctx, msig, types.EmptyTSK)
@@ -135,11 +149,6 @@ var msigProposeCmd = &cli.Command{
 		}
 		proto.Message = *gasedMsg
 		proto.Message.Nonce = curNonce + 1
-
-		// sm, err := fapi.WalletSignMessage(ctx, proto.Message.From, &proto.Message)
-		// if err != nil {
-		// 	return err
-		// }
 
 		keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
 		if err != nil {
@@ -224,13 +233,18 @@ var msigApproveCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("usage: msig approve <msig addr> <message ID> <proposer address> <desination> <value> [ <method> <params> ]"))
 		}
 
+		lwapi, err := GetLocalWalletApi(cctx)
+		if err != nil {
+			return err
+		}
+
 		srv, err := lcli.GetFullNodeServices(cctx)
 		if err != nil {
 			return err
 		}
 		defer srv.Close() //nolint:errcheck
 
-		api := srv.FullNodeAPI()
+		fapi := srv.FullNodeAPI()
 		ctx := lcli.ReqContext(cctx)
 
 		msig, err := address.NewFromString(cctx.Args().Get(0))
@@ -251,26 +265,78 @@ var msigApproveCmd = &cli.Command{
 			}
 			from = f
 		} else {
-			defaddr, err := api.WalletDefaultAddress(ctx)
+			lr, ks, err := openRepo(cctx)
 			if err != nil {
 				return err
 			}
-			from = defaddr
+			defer lr.Close() // nolint
+
+			ki, err := ks.Get(wallet.KDefault)
+			if err != nil {
+				return fmt.Errorf("failed to get default key: %w", err)
+			}
+
+			k, err := key.NewKey(ki)
+			if err != nil {
+				return fmt.Errorf("failed to read default key from keystore: %w", err)
+			}
+
+			from = k.Address
 		}
+
+		act, err := fapi.StateGetActor(ctx, from, types.EmptyTSK)
+		if err != nil {
+			return fmt.Errorf("failed to look up multisig %s: %w", msig, err)
+		}
+
+		curNonce := act.Nonce
 
 		var msgCid cid.Cid
 		if cctx.Args().Len() == 2 {
-			proto, err := api.MsigApprove(ctx, msig, txid, from)
+			proto, err := fapi.MsigApprove(ctx, msig, txid, from)
 			if err != nil {
 				return err
 			}
 
-			sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+			gasedMsg, err := fapi.GasEstimateMessageGas(ctx, &proto.Message, nil, types.EmptyTSK)
+			if err != nil {
+				return fmt.Errorf("estimating gas: %w", err)
+			}
+			proto.Message = *gasedMsg
+			proto.Message.Nonce = curNonce + 1
+
+			keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
+			if err != nil {
+				return fmt.Errorf("failed to resolve ID address: %s", keyAddr.String())
+			}
+
+			mb, err := proto.Message.ToStorageBlock()
+			if err != nil {
+				return fmt.Errorf("serializing message: %w", err)
+			}
+
+			sig, err := lwapi.WalletSign(ctx, keyAddr, mb.Cid().Bytes(), api.MsgMeta{
+				Type:  api.MTChainMsg,
+				Extra: mb.RawData(),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to sign message: %w", err)
+			}
+
+			cid, err := fapi.MpoolPush(ctx, &types.SignedMessage{
+				Message:   proto.Message,
+				Signature: *sig,
+			})
 			if err != nil {
 				return err
 			}
 
-			msgCid = sm.Cid()
+			// sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+			// if err != nil {
+			// 	return err
+			// }
+
+			msgCid = cid
 		} else {
 			proposer, err := address.NewFromString(cctx.Args().Get(2))
 			if err != nil {
@@ -278,7 +344,7 @@ var msigApproveCmd = &cli.Command{
 			}
 
 			if proposer.Protocol() != address.ID {
-				proposer, err = api.StateLookupID(ctx, proposer, types.EmptyTSK)
+				proposer, err = fapi.StateLookupID(ctx, proposer, types.EmptyTSK)
 				if err != nil {
 					return err
 				}
@@ -310,22 +376,55 @@ var msigApproveCmd = &cli.Command{
 				params = p
 			}
 
-			proto, err := api.MsigApproveTxnHash(ctx, msig, txid, proposer, dest, types.BigInt(value), from, method, params)
+			proto, err := fapi.MsigApproveTxnHash(ctx, msig, txid, proposer, dest, types.BigInt(value), from, method, params)
 			if err != nil {
 				return err
 			}
 
-			sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+			gasedMsg, err := fapi.GasEstimateMessageGas(ctx, &proto.Message, nil, types.EmptyTSK)
+			if err != nil {
+				return fmt.Errorf("estimating gas: %w", err)
+			}
+			proto.Message = *gasedMsg
+			proto.Message.Nonce = curNonce + 1
+
+			keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
+			if err != nil {
+				return fmt.Errorf("failed to resolve ID address: %s", keyAddr.String())
+			}
+
+			mb, err := proto.Message.ToStorageBlock()
+			if err != nil {
+				return fmt.Errorf("serializing message: %w", err)
+			}
+
+			sig, err := lwapi.WalletSign(ctx, keyAddr, mb.Cid().Bytes(), api.MsgMeta{
+				Type:  api.MTChainMsg,
+				Extra: mb.RawData(),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to sign message: %w", err)
+			}
+
+			cid, err := fapi.MpoolPush(ctx, &types.SignedMessage{
+				Message:   proto.Message,
+				Signature: *sig,
+			})
 			if err != nil {
 				return err
 			}
 
-			msgCid = sm.Cid()
+			// sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+			// if err != nil {
+			// 	return err
+			// }
+
+			msgCid = cid
 		}
 
 		fmt.Println("sent approval in message: ", msgCid)
 
-		wait, err := api.StateWaitMsg(ctx, msgCid, uint64(cctx.Int("confidence")), build.Finality, true)
+		wait, err := fapi.StateWaitMsg(ctx, msgCid, uint64(cctx.Int("confidence")), build.Finality, true)
 		if err != nil {
 			return err
 		}
