@@ -17,6 +17,7 @@
 /lotus-gateway
 /lotus-pcr
 /lotus-wallet
+/fil-wallet
 /lotus-keygen
 /docgen-md
 /docgen-openrpc
@@ -48,6 +49,8 @@ bin/ipget
 bin/tmp/*
 .idea
 scratchpad
+
+.vscode
 
 build/builtin-actors/v*
 build/builtin-actors/*.car

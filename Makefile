@@ -203,11 +203,11 @@ lotus-health:
 .PHONY: lotus-health
 BINS+=lotus-health
 
-lotus-wallet:
-	rm -f lotus-wallet
-	$(GOCC) build $(GOFLAGS) -o lotus-wallet ./cmd/lotus-wallet
-.PHONY: lotus-wallet
-BINS+=lotus-wallet
+fil-wallet:
+	rm -f fil-wallet
+	$(GOCC) build $(GOFLAGS) -o fil-wallet ./cmd/lotus-wallet
+.PHONY: fil-wallet
+BINS+=fil-wallet
 
 lotus-keygen:
 	rm -f lotus-keygen
