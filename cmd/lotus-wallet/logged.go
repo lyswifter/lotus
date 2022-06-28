@@ -25,6 +25,11 @@ func (c *LoggedWallet) WalletNew(ctx context.Context, typ types.KeyType) (addres
 	return c.under.WalletNew(ctx, typ)
 }
 
+// func (c *LoggedWallet) WalletDefaultAddress(ctx context.Context) (address.Address, error) {
+// 	log.Infow("WalletDefaultAddress")
+// 	return address.Undef, nil
+// }
+
 func (c *LoggedWallet) WalletHas(ctx context.Context, addr address.Address) (bool, error) {
 	log.Infow("WalletHas", "address", addr)
 

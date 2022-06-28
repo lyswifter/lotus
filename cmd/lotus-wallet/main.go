@@ -45,10 +45,11 @@ func main() {
 
 	local := []*cli.Command{
 		runCmd,
-		getApiKeyCmd,
+		// getApiKeyCmd,
 		keyinfoCmd,
-		ledgerCmd,
-		signaturesCmd,
+		// ledgerCmd,
+		// signaturesCmd,
+		multisigCmd,
 	}
 
 	app := &cli.App{
