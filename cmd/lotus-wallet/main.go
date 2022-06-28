@@ -46,6 +46,9 @@ func main() {
 	local := []*cli.Command{
 		runCmd,
 		getApiKeyCmd,
+		keyinfoCmd,
+		ledgerCmd,
+		signaturesCmd,
 	}
 
 	app := &cli.App{
