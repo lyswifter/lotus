@@ -13,7 +13,6 @@ import (
 	"github.com/urfave/cli/v2"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-jsonrpc/auth"
@@ -44,7 +43,7 @@ func main() {
 	lotuslog.SetupLogLevels()
 
 	local := []*cli.Command{
-		runCmd,
+		// runCmd,
 		// getApiKeyCmd,
 		keyinfoCmd,
 		// ledgerCmd,
@@ -53,25 +52,15 @@ func main() {
 	}
 
 	app := &cli.App{
-		Name:    "lotus-wallet",
-		Usage:   "Basic external wallet",
-		Version: build.UserVersion(),
-		Description: `
-lotus-wallet provides a remote wallet service for lotus.
-
-To configure your lotus node to use a remote wallet:
-* Run 'lotus-wallet get-api-key' to generate API key
-* Start lotus-wallet using 'lotus-wallet run' (see --help for additional flags)
-* Edit lotus config (~/.lotus/config.toml)
-  * Find the '[Wallet]' section
-  * Set 'RemoteBackend' to '[api key]:http://[wallet ip]:[wallet port]'
-    (the default port is 1777)
-* Start (or restart) the lotus daemon`,
+		Name:        "fil-wallet",
+		Usage:       "Fil wallet for local private key",
+		Version:     build.UserVersion(),
+		Description: "Fil wallet for local private key",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    FlagWalletRepo,
 				EnvVars: []string{"WALLET_PATH"},
-				Value:   "~/.lotuswallet", // TODO: Consider XDG_DATA_HOME
+				Value:   "~/.filwallet", // TODO: Consider XDG_DATA_HOME
 			},
 			&cli.StringFlag{
 				Name:    "repo",
@@ -107,12 +96,12 @@ var getApiKeyCmd = &cli.Command{
 
 		authKey, err := modules.APISecret(ks, lr)
 		if err != nil {
-			return xerrors.Errorf("setting up api secret: %w", err)
+			return fmt.Errorf("setting up api secret: %w", err)
 		}
 
 		k, err := jwt.Sign(&p, (*jwt.HMACSHA)(authKey))
 		if err != nil {
-			return xerrors.Errorf("jwt sign: %w", err)
+			return fmt.Errorf("jwt sign: %w", err)
 		}
 
 		fmt.Println(string(k))
@@ -224,13 +213,13 @@ var runCmd = &cli.Command{
 		if !cctx.Bool("disable-auth") {
 			authKey, err := modules.APISecret(ks, lr)
 			if err != nil {
-				return xerrors.Errorf("setting up api secret: %w", err)
+				return fmt.Errorf("setting up api secret: %w", err)
 			}
 
 			authVerify := func(ctx context.Context, token string) ([]auth.Permission, error) {
 				var payload jwtPayload
 				if _, err := jwt.Verify([]byte(token), (*jwt.HMACSHA)(authKey), &payload); err != nil {
-					return nil, xerrors.Errorf("JWT Verification failed: %w", err)
+					return nil, fmt.Errorf("JWT Verification failed: %w", err)
 				}
 
 				return payload.Allow, nil
