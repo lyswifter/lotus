@@ -45,6 +45,7 @@ func main() {
 	local := []*cli.Command{
 		// runCmd,
 		// getApiKeyCmd,
+		walletCmd,
 		keyinfoCmd,
 		// ledgerCmd,
 		// signaturesCmd,

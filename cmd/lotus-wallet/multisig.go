@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -14,6 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/chain/wallet/key"
 	lcli "github.com/filecoin-project/lotus/cli"
+	init2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	msig2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
@@ -30,8 +32,131 @@ var multisigCmd = &cli.Command{
 		},
 	},
 	Subcommands: []*cli.Command{
+		msigCreateCmd,
 		msigProposeCmd,
 		msigApproveCmd,
+	},
+}
+
+var msigCreateCmd = &cli.Command{
+	Name:      "create",
+	Usage:     "Create a new multisig wallet",
+	ArgsUsage: "[address1 address2 ...]",
+	Flags: []cli.Flag{
+		&cli.Int64Flag{
+			Name:  "required",
+			Usage: "number of required approvals (uses number of signers provided if omitted)",
+		},
+		&cli.StringFlag{
+			Name:  "value",
+			Usage: "initial funds to give to multisig",
+			Value: "0",
+		},
+		&cli.StringFlag{
+			Name:  "duration",
+			Usage: "length of the period over which funds unlock",
+			Value: "0",
+		},
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "account to send the create message from",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		if cctx.Args().Len() < 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("multisigs must have at least one signer"))
+		}
+
+		srv, err := lcli.GetFullNodeServices(cctx)
+		if err != nil {
+			return err
+		}
+		defer srv.Close() //nolint:errcheck
+
+		api := srv.FullNodeAPI()
+		ctx := lcli.ReqContext(cctx)
+
+		var addrs []address.Address
+		for _, a := range cctx.Args().Slice() {
+			addr, err := address.NewFromString(a)
+			if err != nil {
+				return err
+			}
+			addrs = append(addrs, addr)
+		}
+
+		// get the address we're going to use to create the multisig (can be one of the above, as long as they have funds)
+		var sendAddr address.Address
+		if send := cctx.String("from"); send == "" {
+			defaddr, err := api.WalletDefaultAddress(ctx)
+			if err != nil {
+				return err
+			}
+
+			sendAddr = defaddr
+		} else {
+			addr, err := address.NewFromString(send)
+			if err != nil {
+				return err
+			}
+
+			sendAddr = addr
+		}
+
+		val := cctx.String("value")
+		filval, err := types.ParseFIL(val)
+		if err != nil {
+			return err
+		}
+
+		intVal := types.BigInt(filval)
+
+		required := cctx.Uint64("required")
+		if required == 0 {
+			required = uint64(len(addrs))
+		}
+
+		d := abi.ChainEpoch(cctx.Uint64("duration"))
+
+		gp := types.NewInt(1)
+
+		proto, err := api.MsigCreate(ctx, required, addrs, d, intVal, sendAddr, gp)
+		if err != nil {
+			return err
+		}
+
+		sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+		if err != nil {
+			return err
+		}
+
+		msgCid := sm.Cid()
+
+		fmt.Println("sent create in message: ", msgCid)
+		fmt.Println("waiting for confirmation..")
+
+		// wait for it to get mined into a block
+		wait, err := api.StateWaitMsg(ctx, msgCid, uint64(cctx.Int("confidence")), build.Finality, true)
+		if err != nil {
+			return err
+		}
+
+		// check it executed successfully
+		if wait.Receipt.ExitCode != 0 {
+			fmt.Fprintln(cctx.App.Writer, "actor creation failed!")
+			return err
+		}
+
+		// get address of newly created miner
+
+		var execreturn init2.ExecReturn
+		if err := execreturn.UnmarshalCBOR(bytes.NewReader(wait.Receipt.Return)); err != nil {
+			return err
+		}
+		fmt.Fprintln(cctx.App.Writer, "Created new multisig: ", execreturn.IDAddress, execreturn.RobustAddress)
+
+		// TODO: maybe register this somewhere
+		return nil
 	},
 }
 
