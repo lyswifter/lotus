@@ -64,7 +64,7 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed fil-wallet lotus-gateway lotus-fountain lotus-stats
+build-devnets: build fil-wallet
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -113,7 +113,7 @@ lotus-gateway: $(BUILD_DEPS)
 .PHONY: lotus-gateway
 BINS+=lotus-gateway
 
-build: lotus lotus-miner lotus-worker
+build: lotus
 	@[[ $$(type -P "lotus") ]] && echo "Caution: you have \
 an existing lotus binary in your PATH. This may cause problems if you don't run 'sudo make install'" || true
 
