@@ -70,13 +70,26 @@ var msigCreateCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("multisigs must have at least one signer"))
 		}
 
+		lr, ks, err := openRepo(cctx)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+
+		var wapi api.Wallet = lw
+
 		srv, err := lcli.GetFullNodeServices(cctx)
 		if err != nil {
 			return err
 		}
 		defer srv.Close() //nolint:errcheck
 
-		api := srv.FullNodeAPI()
+		fapi := srv.FullNodeAPI()
 		ctx := lcli.ReqContext(cctx)
 
 		var addrs []address.Address
@@ -91,7 +104,7 @@ var msigCreateCmd = &cli.Command{
 		// get the address we're going to use to create the multisig (can be one of the above, as long as they have funds)
 		var sendAddr address.Address
 		if send := cctx.String("from"); send == "" {
-			defaddr, err := api.WalletDefaultAddress(ctx)
+			defaddr, err := fapi.WalletDefaultAddress(ctx)
 			if err != nil {
 				return err
 			}
@@ -104,6 +117,11 @@ var msigCreateCmd = &cli.Command{
 			}
 
 			sendAddr = addr
+		}
+
+		act, err := fapi.StateGetActor(ctx, sendAddr, types.EmptyTSK)
+		if err != nil {
+			return fmt.Errorf("failed to look up multisig %s: %w", sendAddr, err)
 		}
 
 		val := cctx.String("value")
@@ -123,23 +141,58 @@ var msigCreateCmd = &cli.Command{
 
 		gp := types.NewInt(1)
 
-		proto, err := api.MsigCreate(ctx, required, addrs, d, intVal, sendAddr, gp)
+		proto, err := fapi.MsigCreate(ctx, required, addrs, d, intVal, sendAddr, gp)
 		if err != nil {
 			return err
 		}
 
-		sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+		gasedMsg, err := fapi.GasEstimateMessageGas(ctx, &proto.Message, nil, types.EmptyTSK)
+		if err != nil {
+			return fmt.Errorf("estimating gas: %w", err)
+		}
+		proto.Message = *gasedMsg
+		proto.Message.Nonce = act.Nonce + 1
+
+		keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
+		if err != nil {
+			return fmt.Errorf("failed to resolve ID address: %s", keyAddr.String())
+		}
+
+		mb, err := proto.Message.ToStorageBlock()
+		if err != nil {
+			return fmt.Errorf("serializing message: %w", err)
+		}
+
+		sig, err := wapi.WalletSign(ctx, keyAddr, mb.Cid().Bytes(), api.MsgMeta{
+			Type:  api.MTChainMsg,
+			Extra: mb.RawData(),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to sign message: %w", err)
+		}
+
+		cid, err := fapi.MpoolPush(ctx, &types.SignedMessage{
+			Message:   proto.Message,
+			Signature: *sig,
+		})
 		if err != nil {
 			return err
 		}
 
-		msgCid := sm.Cid()
+		msgCid := cid
+
+		// sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+		// if err != nil {
+		// 	return err
+		// }
+
+		// msgCid := sm.Cid()
 
 		fmt.Println("sent create in message: ", msgCid)
 		fmt.Println("waiting for confirmation..")
 
 		// wait for it to get mined into a block
-		wait, err := api.StateWaitMsg(ctx, msgCid, uint64(cctx.Int("confidence")), build.Finality, true)
+		wait, err := fapi.StateWaitMsg(ctx, msgCid, uint64(cctx.Int("confidence")), build.Finality, true)
 		if err != nil {
 			return err
 		}
