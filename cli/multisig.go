@@ -406,6 +406,8 @@ var msigProposeCmd = &cli.Command{
 			}
 			method = m
 
+			
+
 			p, err := hex.DecodeString(cctx.Args().Get(4))
 			if err != nil {
 				return err

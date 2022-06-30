@@ -8,13 +8,16 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/chain/wallet/key"
 	lcli "github.com/filecoin-project/lotus/cli"
+	vrctor1 "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
 	init2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	msig2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/ipfs/go-cid"
@@ -163,7 +166,7 @@ var msigCreateCmd = &cli.Command{
 var msigProposeCmd = &cli.Command{
 	Name:      "propose",
 	Usage:     "Propose a multisig transaction",
-	ArgsUsage: "[multisigAddress destinationAddress value <methodId methodParams> (optional)]",
+	ArgsUsage: "[multisigAddress destinationAddress value <methodId clientAddress allowance> (optional)]",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "from",
@@ -175,7 +178,7 @@ var msigProposeCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("must pass at least multisig address, destination, and value"))
 		}
 
-		if cctx.Args().Len() > 3 && cctx.Args().Len() != 5 {
+		if cctx.Args().Len() > 3 && cctx.Args().Len() != 6 {
 			return lcli.ShowHelp(cctx, fmt.Errorf("must either pass three or five arguments"))
 		}
 
@@ -218,11 +221,31 @@ var msigProposeCmd = &cli.Command{
 			}
 			method = m
 
-			p, err := hex.DecodeString(cctx.Args().Get(4))
+			clientaddress, err := address.NewFromString(cctx.Args().Get(4))
 			if err != nil {
 				return err
 			}
-			params = p
+
+			allowance, err := big.FromString(cctx.Args().Get(5))
+			if err != nil {
+				return err
+			}
+
+			pa := &vrctor1.AddVerifiedClientParams{
+				Address:   clientaddress,
+				Allowance: allowance,
+			}
+
+			buf, err := actors.SerializeParams(pa)
+			if err != nil {
+				return err
+			}
+
+			// p, err := hex.DecodeString(cctx.Args().Get(4))
+			// if err != nil {
+			// 	return err
+			// }
+			params = buf
 		}
 
 		var from address.Address
