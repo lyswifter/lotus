@@ -304,6 +304,9 @@ var msigProposeCmd = &cli.Command{
 				return err
 			}
 
+			fmt.Printf("pa: %+v\n", pa)
+			fmt.Printf("buf: %+s\n", buf)
+
 			// p, err := hex.DecodeString(cctx.Args().Get(4))
 			// if err != nil {
 			// 	return err
