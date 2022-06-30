@@ -151,8 +151,6 @@ var msigCreateCmd = &cli.Command{
 			return fmt.Errorf("estimating gas: %w", err)
 		}
 
-		fmt.Printf("act.Nonce %d", act.Nonce)
-
 		proto.Message = *gasedMsg
 		proto.Message.Nonce = act.Nonce
 
@@ -183,13 +181,6 @@ var msigCreateCmd = &cli.Command{
 		}
 
 		msgCid := cid
-
-		// sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
-		// if err != nil {
-		// 	return err
-		// }
-
-		// msgCid := sm.Cid()
 
 		fmt.Println("sent create in message: ", msgCid)
 		fmt.Println("waiting for confirmation..")
@@ -304,13 +295,6 @@ var msigProposeCmd = &cli.Command{
 				return err
 			}
 
-			fmt.Printf("pa: %+v\n", pa)
-			fmt.Printf("buf: %+s\n", buf)
-
-			// p, err := hex.DecodeString(cctx.Args().Get(4))
-			// if err != nil {
-			// 	return err
-			// }
 			params = buf
 		}
 

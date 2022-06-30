@@ -51,6 +51,7 @@ func main() {
 		// ledgerCmd,
 		// signaturesCmd,
 		multisigCmd,
+		verifyClientCmd,
 	}
 
 	app := &cli.App{
