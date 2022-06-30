@@ -447,10 +447,17 @@ var msigApproveCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("usage: msig approve <msig addr> <message ID> <proposer address> <desination> <value> [ <method> <params> ]"))
 		}
 
-		lwapi, err := GetLocalWalletApi(cctx)
+		lr, ks, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+		var lwapi api.Wallet = lw
 
 		srv, err := lcli.GetFullNodeServices(cctx)
 		if err != nil {
@@ -545,11 +552,6 @@ var msigApproveCmd = &cli.Command{
 				return err
 			}
 
-			// sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
-			// if err != nil {
-			// 	return err
-			// }
-
 			msgCid = cid
 		} else {
 			proposer, err := address.NewFromString(cctx.Args().Get(2))
@@ -600,7 +602,7 @@ var msigApproveCmd = &cli.Command{
 				return fmt.Errorf("estimating gas: %w", err)
 			}
 			proto.Message = *gasedMsg
-			proto.Message.Nonce = curNonce + 1
+			proto.Message.Nonce = curNonce
 
 			keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
 			if err != nil {
