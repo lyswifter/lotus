@@ -338,16 +338,21 @@ var msigProposeCmd = &cli.Command{
 			from = k.Address
 		}
 
-		act, err := fapi.StateGetActor(ctx, msig, types.EmptyTSK)
+		fromact, err := fapi.StateGetActor(ctx, from, types.EmptyTSK)
 		if err != nil {
 			return fmt.Errorf("failed to look up multisig %s: %w", msig, err)
 		}
 
-		if !builtin.IsMultisigActor(act.Code) {
+		mact, err := fapi.StateGetActor(ctx, msig, types.EmptyTSK)
+		if err != nil {
+			return fmt.Errorf("failed to look up multisig %s: %w", msig, err)
+		}
+
+		if !builtin.IsMultisigActor(mact.Code) {
 			return fmt.Errorf("actor %s is not a multisig actor", msig)
 		}
 
-		curNonce := act.Nonce
+		curNonce := fromact.Nonce
 
 		proto, err := fapi.MsigPropose(ctx, msig, dest, types.BigInt(value), from, method, params)
 		if err != nil {
