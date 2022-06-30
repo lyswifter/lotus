@@ -277,7 +277,7 @@ var msigProposeCmd = &cli.Command{
 
 		var method uint64
 		var params []byte
-		if cctx.Args().Len() == 5 {
+		if cctx.Args().Len() == 6 {
 			m, err := strconv.ParseUint(cctx.Args().Get(3), 10, 64)
 			if err != nil {
 				return err
