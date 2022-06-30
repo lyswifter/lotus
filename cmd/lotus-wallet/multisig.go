@@ -359,7 +359,7 @@ var msigProposeCmd = &cli.Command{
 			return fmt.Errorf("estimating gas: %w", err)
 		}
 		proto.Message = *gasedMsg
-		proto.Message.Nonce = curNonce + 1
+		proto.Message.Nonce = curNonce
 
 		keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
 		if err != nil {
@@ -509,7 +509,7 @@ var msigApproveCmd = &cli.Command{
 				return fmt.Errorf("estimating gas: %w", err)
 			}
 			proto.Message = *gasedMsg
-			proto.Message.Nonce = curNonce + 1
+			proto.Message.Nonce = curNonce
 
 			keyAddr, err := fapi.StateAccountKey(ctx, proto.Message.From, types.EmptyTSK)
 			if err != nil {
