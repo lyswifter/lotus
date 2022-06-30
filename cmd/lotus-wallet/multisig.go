@@ -308,6 +308,13 @@ var msigProposeCmd = &cli.Command{
 			return fmt.Errorf("serializing message: %w", err)
 		}
 
+		lr, _, err := openRepo(cctx)
+		if err != nil {
+			return err
+		}
+
+		defer lr.Close()
+
 		sig, err := lwapi.WalletSign(ctx, keyAddr, mb.Cid().Bytes(), api.MsgMeta{
 			Type:  api.MTChainMsg,
 			Extra: mb.RawData(),
