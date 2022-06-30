@@ -43,6 +43,7 @@ func main() {
 	lotuslog.SetupLogLevels()
 
 	local := []*cli.Command{
+		sendCmd,
 		// runCmd,
 		// getApiKeyCmd,
 		walletCmd,
