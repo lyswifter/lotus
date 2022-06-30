@@ -35,12 +35,12 @@ var walletCmd = &cli.Command{
 		walletBalance,
 		walletExport,
 		walletImport,
-		walletGetDefault,
-		walletSetDefault,
-		walletSign,
-		walletVerify,
+		// walletGetDefault,
+		// walletSetDefault,
+		// walletSign,
+		// walletVerify,
 		walletDelete,
-		walletMarket,
+		// walletMarket,
 	},
 }
 
@@ -103,6 +103,19 @@ var walletList = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
+		lr, ks, err := openRepo(cctx)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+
+		var wapi api.Wallet = lw
+
 		api, closer, err := lcli.GetFullNodeAPI(cctx)
 		if err != nil {
 			return err
@@ -112,13 +125,13 @@ var walletList = &cli.Command{
 
 		afmt := lcli.NewAppFmt(cctx.App)
 
-		addrs, err := api.WalletList(ctx)
+		addrs, err := wapi.WalletList(ctx)
 		if err != nil {
 			return err
 		}
 
 		// Assume an error means no default key is set
-		def, _ := api.WalletDefaultAddress(ctx)
+		// def, _ := api.WalletDefaultAddress(ctx)
 
 		tw := tablewriter.New(
 			tablewriter.Col("Address"),
@@ -154,9 +167,9 @@ var walletList = &cli.Command{
 					"Balance": types.FIL(a.Balance),
 					"Nonce":   a.Nonce,
 				}
-				if addr == def {
-					row["Default"] = "X"
-				}
+				// if addr == def {
+				// 	row["Default"] = "X"
+				// }
 
 				if cctx.Bool("id") {
 					id, err := api.StateLookupID(ctx, addr, types.EmptyTSK)
@@ -511,11 +524,24 @@ var walletDelete = &cli.Command{
 	Usage:     "Soft delete an address from the wallet - hard deletion needed for permanent removal",
 	ArgsUsage: "<address> ",
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		lr, ks, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
-		defer closer()
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+
+		var wapi api.Wallet = lw
+
+		// api, closer, err := lcli.GetFullNodeAPI(cctx)
+		// if err != nil {
+		// 	return err
+		// }
+		// defer closer()
 		ctx := lcli.ReqContext(cctx)
 
 		if !cctx.Args().Present() || cctx.NArg() != 1 {
@@ -527,7 +553,7 @@ var walletDelete = &cli.Command{
 			return err
 		}
 
-		return api.WalletDelete(ctx, addr)
+		return wapi.WalletDelete(ctx, addr)
 	},
 }
 
