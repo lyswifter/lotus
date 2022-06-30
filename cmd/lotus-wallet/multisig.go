@@ -182,10 +182,17 @@ var msigProposeCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("must either pass three or five arguments"))
 		}
 
-		lwapi, err := GetLocalWalletApi(cctx)
+		lr, ks, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+		var lwapi api.Wallet = lw
 
 		srv, err := lcli.GetFullNodeServices(cctx)
 		if err != nil {
@@ -308,13 +315,6 @@ var msigProposeCmd = &cli.Command{
 			return fmt.Errorf("serializing message: %w", err)
 		}
 
-		lr, _, err := openRepo(cctx)
-		if err != nil {
-			return err
-		}
-
-		defer lr.Close()
-
 		sig, err := lwapi.WalletSign(ctx, keyAddr, mb.Cid().Bytes(), api.MsgMeta{
 			Type:  api.MTChainMsg,
 			Extra: mb.RawData(),
@@ -330,11 +330,6 @@ var msigProposeCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-
-		// sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
-		// if err != nil {
-		// 	return err
-		// }
 
 		msgCid := cid
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/filecoin-project/lotus/api"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/urfave/cli/v2"
 
@@ -21,6 +22,7 @@ import (
 
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/lib/tablewriter"
 )
 
@@ -47,11 +49,19 @@ var walletNew = &cli.Command{
 	Usage:     "Generate a new key of the given type",
 	ArgsUsage: "[bls|secp256k1 (default secp256k1)]",
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		lr, ks, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
-		defer closer()
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+
+		var wapi api.Wallet = lw
+
 		ctx := lcli.ReqContext(cctx)
 
 		afmt := lcli.NewAppFmt(cctx.App)
@@ -61,7 +71,7 @@ var walletNew = &cli.Command{
 			t = "secp256k1"
 		}
 
-		nk, err := api.WalletNew(ctx, types.KeyType(t))
+		nk, err := wapi.WalletNew(ctx, types.KeyType(t))
 		if err != nil {
 			return err
 		}
