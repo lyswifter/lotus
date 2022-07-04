@@ -292,11 +292,24 @@ var walletExport = &cli.Command{
 	Usage:     "export keys",
 	ArgsUsage: "[address]",
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		lr, ks, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
-		defer closer()
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+
+		var wapi api.Wallet = lw
+
+		// api, closer, err := lcli.GetFullNodeAPI(cctx)
+		// if err != nil {
+		// 	return err
+		// }
+		// defer closer()
 		ctx := lcli.ReqContext(cctx)
 
 		afmt := lcli.NewAppFmt(cctx.App)
@@ -310,7 +323,7 @@ var walletExport = &cli.Command{
 			return err
 		}
 
-		ki, err := api.WalletExport(ctx, addr)
+		ki, err := wapi.WalletExport(ctx, addr)
 		if err != nil {
 			return err
 		}
@@ -335,17 +348,30 @@ var walletImport = &cli.Command{
 			Usage: "specify input format for key",
 			Value: "hex-lotus",
 		},
-		&cli.BoolFlag{
-			Name:  "as-default",
-			Usage: "import the given key as your new default key",
-		},
+		// &cli.BoolFlag{
+		// 	Name:  "as-default",
+		// 	Usage: "import the given key as your new default key",
+		// },
 	},
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		lr, ks, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
-		defer closer()
+		defer lr.Close() // nolint
+
+		lw, err := wallet.NewWallet(ks)
+		if err != nil {
+			return err
+		}
+
+		var wapi api.Wallet = lw
+
+		// api, closer, err := lcli.GetFullNodeAPI(cctx)
+		// if err != nil {
+		// 	return err
+		// }
+		// defer closer()
 		ctx := lcli.ReqContext(cctx)
 
 		var inpdata []byte
@@ -406,16 +432,16 @@ var walletImport = &cli.Command{
 			return fmt.Errorf("unrecognized format: %s", cctx.String("format"))
 		}
 
-		addr, err := api.WalletImport(ctx, &ki)
+		addr, err := wapi.WalletImport(ctx, &ki)
 		if err != nil {
 			return err
 		}
 
-		if cctx.Bool("as-default") {
-			if err := api.WalletSetDefault(ctx, addr); err != nil {
-				return fmt.Errorf("failed to set default key: %w", err)
-			}
-		}
+		// if cctx.Bool("as-default") {
+		// 	if err := api.WalletSetDefault(ctx, addr); err != nil {
+		// 		return fmt.Errorf("failed to set default key: %w", err)
+		// 	}
+		// }
 
 		fmt.Printf("imported key %s successfully!\n", addr)
 		return nil
